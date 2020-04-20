@@ -1,10 +1,8 @@
-from flask import Flask, request, jsonify, json, render_template, flash, redirect, session, abort, url_for
+from flask import Flask, request, jsonify, Response, render_template, flash, redirect, session, abort, url_for
 import requests
-from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-#from matplotlib.figure import Figure
-#from matplotlib.backends.backend_agg import FigureCanvasAgg
 from CassandraHandler import *
+
 
 app = Flask(__name__)
 app.secret_key = 'dev_key'
@@ -53,6 +51,7 @@ def login():
         else:
             username = username.strip()
             password = password.strip()
+            session["username"] = username
 
         userInfo = queryExistingUser(username)
         if userInfo and check_password_hash(userInfo.enc_password, password):
@@ -62,26 +61,35 @@ def login():
 
     return render_template("login.html")
 
-@app.route('/home/<username>/')
+@app.route('/home/<username>/', methods = ['GET'])
 def home(username):
     return render_template('index.html', username = username)
 
-@app.route('/getStockQuotes', methods = ['POST'])
+
+
+@app.route('/getStockQuotes', methods = ['GET','POST'])
 def getStockQuotes():
-    stockIndex = request.form['stock_index']
-    startDate = request.form['start_date']
-    endDate = request.form['end_date']
+    if "username" in session:
+        username = session["username"]
+        stockIndex = request.form['stock_index']
+        startDate = request.form['start_date']
+        endDate = request.form['end_date']
 
-    response = requests.get('https://sandbox.tradier.com/v1/markets/history',
-        params={'symbol': stockIndex, 'interval': 'daily', 'start': startDate, 'end': endDate},
-        headers={'Authorization': 'Bearer ' +TOKEN, 'Accept': 'application/json'}
-        )
-    dates, prices = prepareStockQuotes(response)
+        response = requests.get('https://sandbox.tradier.com/v1/markets/history',
+            params={'symbol': stockIndex, 'interval': 'daily', 'start': startDate, 'end': endDate},
+            headers={'Authorization': 'Bearer ' +TOKEN, 'Accept': 'application/json'}
+            )
+        dates, prices = prepareStockQuotes(response)
+        gen_headlines = ['placeholder']
+        addToUserHistory(username,stockIndex.upper(),startDate,endDate, prices)
 
-    return render_template('stockQuotes.html', data = [dates, prices], stockIndex = stockIndex)
+        return render_template('stockQuotes.html',stockIndex = stockIndex.upper(),
+                               values=prices, labels=dates, legend=stockIndex.upper())
+    else:
+        return redirect(url_for('login'))
 
-@app.route('/getStockQuotes/<stockIndex>/graph', methods = ['GET'])
-def plotStockGraph(stockIndex):
+@app.route('/history')
+def userHistory(username):
     pass
 
 
@@ -93,11 +101,10 @@ def prepareStockQuotes(response):
     for quote in quote_list:
         for key in quote.keys():
             if key == 'date':
-                dates.append(datetime.strptime(quote['date'], '%Y-%m-%d'))
+                dates.append(quote['date'])
             elif key == 'close':
                 prices.append(quote['close'])
     return dates, prices
-
 
 
 if __name__ =='__main__':
