@@ -26,7 +26,8 @@ def signup():
             password = password.strip()
 
         userInfo = queryExistingUser(username)
-        if not userInfo:
+        if userInfo:
+
             flash("Username {} is not available.".format(username))
             return redirect(url_for('signup'))
         else:
@@ -65,8 +66,6 @@ def login():
 def home(username):
     return render_template('index.html', username = username)
 
-
-
 @app.route('/getStockQuotes', methods = ['GET','POST'])
 def getStockQuotes():
     if "username" in session:
@@ -80,18 +79,41 @@ def getStockQuotes():
             headers={'Authorization': 'Bearer ' +TOKEN, 'Accept': 'application/json'}
             )
         dates, prices = prepareStockQuotes(response)
-        gen_headlines = ['placeholder']
-        addToUserHistory(username,stockIndex.upper(),startDate,endDate, prices)
+        notes = 'placeholder'
+        addToUserHistory(username,stockIndex.upper(),startDate,endDate, prices, notes)
 
         return render_template('stockQuotes.html',stockIndex = stockIndex.upper(),
                                values=prices, labels=dates, legend=stockIndex.upper())
     else:
         return redirect(url_for('login'))
 
-@app.route('/history')
-def userHistory(username):
-    pass
+@app.route('/history', methods = ['GET'])
+def userHistory():
+    if "username" in session:
+        username = session["username"]
+        history = queryUserHistory(username)
+        if not history:
+            flash('No User History Found.')
+        else:
+            return render_template('history.html', data = history)
+    else:
+        return redirect(url_for('login'))
 
+@app.route('/editNotes', methods = ['PUT'])
+def update():
+    q = """UPDATE stocksHelper.historyLog
+           SET notes = '{}'
+           WHERE stockIndex = '{}';""".format(request.json['notes'],
+                                              request.json['stockIndex'])
+    cl_session.execute(q)
+    return jsonify({'message': 'updated: /editNotes/{}'.format(request.json['stockIndex'])}), 200
+
+@app.route('/editNotes', methods = ['DELETE'])
+def remove():
+    q = """DELETE FROM stocksHelper.historyLog
+           WHERE stockIndex = '{}';""".format(request.json['stockIndex'])
+    cl_session.execute(q)
+    return jsonify({'message': 'removed: /editNotes/{}'.format(request.json['stockIndex'])}), 200
 
 def prepareStockQuotes(response):
     quote_list = response.json()['history']['day']
@@ -105,7 +127,6 @@ def prepareStockQuotes(response):
             elif key == 'close':
                 prices.append(quote['close'])
     return dates, prices
-
 
 if __name__ =='__main__':
     app.run(host='0.0.0.0', port=80, debug=True)

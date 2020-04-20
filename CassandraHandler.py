@@ -8,7 +8,7 @@ cl_session = cluster.connect()
 """def startDB():
     queries = ["CREATE KEYSPACE stocksHelper WITH REPLICATION ={'class' : 'SimpleStrategy', 'replication_factor' : 1};",
            "CREATE TABLE stocksHelper.currentUsers (ID UUID, username text PRIMARY KEY, enc_password text);",
-           "CREATE TABLE stocksHelper.history (ID UUID PRIMARY KEY, username text, stockIndex text, startDate text, endDate text, prices list<float>, gen_headlines list<text>);"]
+           "CREATE TABLE stocksHelper.historyLog (username text, stockIndex text PRIMARY KEY, startDate text, endDate text, prices list<float>, notes text);"]
     for q in queries:
         session.execute_async(session.prepare(q))
 """
@@ -27,14 +27,14 @@ def queryExistingUser(username):
            ALLOW FILTERING""".format(username)
 
     result = cl_session.execute_async(q).result()
-    if len(result._current_rows)>0:
+    if len(result._current_rows)==1:
         return result[0]
     else:
         return False
 
 def queryUserHistory(username):
-    q = """SELECT stockIndex, startDate, endDate, prices, gen_headlines 
-           FROM stocksHelper.userHistory 
+    q = """SELECT stockIndex, startDate, endDate, notes  
+           FROM stocksHelper.historyLog 
            WHERE username = '{}' 
            ALLOW FILTERING""".format(username)
     result = cl_session.execute_async(q).result()
@@ -43,12 +43,12 @@ def queryUserHistory(username):
     else:
         return False
 
-def addToUserHistory(username,stockIndex, startDate, endDate, prices):
-    q = """INSERT INTO stocksHelper.history
-            (ID, username, stockIndex, startDate, endDate, prices)
+def addToUserHistory(username,stockIndex, startDate, endDate, prices, notes):
+    q = """INSERT INTO stocksHelper.historyLog
+            (username, stockIndex, startDate, endDate, prices, notes)
             VALUES (?, ?, ?, ?, ?, ?)"""
     cl_session.execute(cl_session.prepare(q),
-                    [uuid.uuid1(), username, stockIndex, startDate, endDate, prices])
+                    [username, stockIndex, startDate, endDate, prices, notes])
 
 def removeFromUserHistory(username):
     pass
