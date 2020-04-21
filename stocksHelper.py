@@ -52,10 +52,10 @@ def login():
         else:
             username = username.strip()
             password = password.strip()
-            session["username"] = username
 
         userInfo = queryExistingUser(username)
         if userInfo and check_password_hash(userInfo.enc_password, password):
+            session["username"] = username
             return redirect(url_for("home", username=username))
         else:
             flash("Invalid username or password.")
@@ -129,4 +129,4 @@ def prepareStockQuotes(response):
     return dates, prices
 
 if __name__ =='__main__':
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='0.0.0.0', port=80, debug=True, ssl_context=('cert.pem', 'key.pem'))
